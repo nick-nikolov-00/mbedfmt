@@ -1,0 +1,8 @@
+BasedOnStyle: LLVM
+
+IndentWidth: 4
+BreakBeforeConceptDeclarations: Always
+AlwaysBreakTemplateDeclarations: Yes
+DerivePointerAlignment: false
+PointerAlignment: Left
+SpaceAfterCStyleCast: true
