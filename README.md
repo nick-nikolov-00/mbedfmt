@@ -49,9 +49,9 @@ target_link_libraries(your_target PRIVATE mbedfmt)
 
 ## Core API Reference
 
-### Format String Conversion Macros
+### Format String Conversion Macro
 
-#### MBEDFMT_FMT_TO_PRINTF_CSTR (recommended, C++20 only)
+#### MBEDFMT_FMT_TO_PRINTF_CSTR
 
 ```c++
 MBEDFMT_FMT_TO_PRINTF_CSTR(fmt, ...)
@@ -74,29 +74,9 @@ constexpr const char* c3 = MBEDFMT_FMT_TO_PRINTF_CSTR("string: {}", "s");       
 printf(c1, 1, 1);
 ```
 
-#### MBEDFMT_FMT_TO_PRINTF_ARR (C++17 and C++20)
-
-```c++
-MBEDFMT_FMT_TO_PRINTF_ARR(fmt, ...)
-```
-
-Returns a compile-time null-terminated std::array<char, N> translating the fmt formatted string to printf format. Same arguments as
-`MBEDFMT_FMT_TO_PRINTF_CSTR`. Note that since it returns an std::array it needs to be printed using `.data()`.
-
-##### Example
-
-```c++
-constexpr auto c1 = MBEDFMT_FMT_TO_PRINTF_ARR("ints: {} {}", (int) 1, (int) 1); // c1 is "ints: %d %d"
-
-printf(c1.data(), 1, 1);
-```
-
 ## Usage
 
-A small example program that uses printf to print the converted fmt strings. The C++20 syntax is recommended if
-available, as it is identical to the equivalent printf usage in terms of generated code. Due to limitations of C++17,
-the converted strings are returned as a std::array\<char\>, which may generate slightly different code than using pure
-printf.
+A small example program that uses printf to print the converted fmt strings.
 
 ```c++
 #include <cstdio>
@@ -109,15 +89,6 @@ void convertingPrint(const char* fmt, const Args&... args) {
   printf(fmt, mbedfmt::convert(args)...);
 }
 
-// C++17 syntax
-#define LOG(fmt, ...)                                                      \
-  do {                                                                     \
-    static constexpr auto printfLog =                                      \
-        MBEDFMT_FMT_TO_PRINTF_ARR(fmt, __VA_ARGS__);                       \
-    convertingPrint(printfLog.data() __VA_OPT__(, __VA_ARGS__));           \
-  } while (0)
-
-// C++20 syntax
 #define LOG(fmt, ...)                                                      \
   do {                                                                     \
     static constexpr const char* printfLog =                               \

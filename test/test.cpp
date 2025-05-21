@@ -5,36 +5,60 @@
 #define TEST_EQ(printf, fmt, ...)                                              \
     do {                                                                       \
         static constexpr auto printfLog =                                      \
-            MBEDFMT_FMT_TO_PRINTF_ARR(fmt, __VA_ARGS__);                       \
+            MBEDFMT_FMT_TO_PRINTF_CSTR(fmt, __VA_ARGS__);                      \
         static_assert(verifyEquality(printf, printfLog), "logs don't match");  \
     } while (0)
 
 namespace {
-template <size_t N>
-bool constexpr verifyEquality(const char* s, std::array<char, N> s1) {
-    for (size_t i = 0; i < N; i++) {
-        if (s[i] != s1[i])
-            return false;
+
+bool constexpr verifyEquality(const char* s, const char* s1) {
+    while (*s && *s == *s1) {
+        s++;
+        s1++;
     }
 
-    return s1[N - 1] == 0;
+    return *s == *s1;
 }
 
-void test() {
+} // namespace
+
+struct IntWrapper {
+    int val;
+};
+
+struct IntWrapperWrapper {
+    IntWrapper wrapper;
+};
+
+template <>
+struct mbedfmt::type_formatter<IntWrapper> {
+    static auto convert(const IntWrapper& p) {
+        return p.val;
+    }
+};
+
+template <>
+struct mbedfmt::type_formatter<IntWrapperWrapper> {
+    static auto convert(const IntWrapperWrapper& p) {
+        return p.wrapper;
+    }
+};
+
+__attribute_maybe_unused__ void test() {
     // basic case no formatters
-    TEST_EQ("","");
-    TEST_EQ("t","t");
-    TEST_EQ("test","test");
+    TEST_EQ("", "");
+    TEST_EQ("t", "t");
+    TEST_EQ("test", "test");
 
     // escape %
-    TEST_EQ("%%","%");
-    TEST_EQ("%%%%","%%");
+    TEST_EQ("%%", "%");
+    TEST_EQ("%%%%", "%%");
 
     // escaped brackets
-    TEST_EQ("{","{{");
-    TEST_EQ("{{","{{{{");
-    TEST_EQ("}","}}");
-    TEST_EQ("}}","}}}}");
+    TEST_EQ("{", "{{");
+    TEST_EQ("{{", "{{{{");
+    TEST_EQ("}", "}}");
+    TEST_EQ("}}", "}}}}");
 
     // basic type formatters
     TEST_EQ("%hhd", "{}", (signed char) 'a');
@@ -87,7 +111,7 @@ void test() {
     // width
     TEST_EQ("%3d", "{:3}", (int) 1);
     TEST_EQ("%13d", "{:13}", (int) 1);
-    TEST_EQ("%13d", "{:>13}", (int) 1); // right-justified is default
+    TEST_EQ("%13d", "{:>13}", (int) 1);  // right-justified is default
     TEST_EQ("%-13d", "{:<13}", (int) 1); // left-justified
 
     // flags
@@ -95,7 +119,7 @@ void test() {
     TEST_EQ("%#d", "{:#}", (int) 1);
     TEST_EQ("%03d", "{:03}", (int) 1);
 
-    // conversions
+    // format type conversions
     TEST_EQ("%x", "{:x}", (unsigned int) 1);
     TEST_EQ("%X", "{:X}", (unsigned int) 1);
     TEST_EQ("%o", "{:o}", (unsigned int) 1);
@@ -105,6 +129,14 @@ void test() {
     TEST_EQ("%G", "{:G}", (double) 1);
     TEST_EQ("%a", "{:a}", (double) 1);
     TEST_EQ("%A", "{:A}", (double) 1);
-}
 
-} // namespace
+    // var type conversions
+    IntWrapper intWrapper{};
+    IntWrapperWrapper intWrapperWrapper{};
+    TEST_EQ("%d", "{}", intWrapper);
+    TEST_EQ("%d", "{}", intWrapperWrapper);
+
+    static_assert(std::is_same<int, decltype(mbedfmt::convert((int) 1))>());
+    static_assert(std::is_same<int, decltype(mbedfmt::convert(intWrapper))>());
+    static_assert(std::is_same<int, decltype(mbedfmt::convert(intWrapperWrapper))>());
+}

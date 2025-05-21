@@ -47,16 +47,6 @@ struct SAString {
     size_t size{};
 };
 
-constexpr size_t strlen(const char* s) {
-    size_t result = 0;
-
-    while (*(s++)) {
-        result++;
-    }
-
-    return result;
-}
-
 constexpr size_t stringToSizeT(const std::basic_string_view<char>& sv) {
     size_t result = 0;
     for (const auto& c : sv) {

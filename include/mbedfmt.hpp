@@ -12,34 +12,13 @@
 #define EXPAND_AND_CONCAT(format) format##_mbedfmt_tstr
 
 /**
- * @brief Converts an fmt-style format string to a printf-style format string array at compile time
+ * @brief Converts an fmt-style format string to a printf-style cstring at
+ * compile time
  *
- * This macro processes an fmt format string and its argument types, generating a printf-compatible
- * format string stored in a std::array<char>. The conversion and type checking are done at compile time.
- * The resulting array should be printed with arguments converted using mbedfmt::convert.
- *
- * @param fmt The fmt string literal
- * @param ... The arguments that will be used to print the string
- * @return std::array\<char, N\> containing the null-terminated printf format string
- *
- * @example
- * @code
- * static constexpr auto fmt = MBEDFMT_FMT_TO_PRINTF_ARR("Value: {:.2}", (float) 1.0);
- * // fmt.data() contains "Value: %.2f"
- * @endcode
- */
-#define MBEDFMT_FMT_TO_PRINTF_ARR(fmt, ...)                                    \
-    mbedfmt::getPrintfArr<decltype(EXPAND_AND_CONCAT(fmt))>(                   \
-        decltype(mbedfmt::toArgPack(__VA_ARGS__))())
-
-#if __cplusplus >= 202002L
-
-/**
- * @brief Converts an fmt-style format string to a printf-style string literal at compile time (C++20)
- *
- * Similar to MBEDFMT_FMT_TO_PRINTF_ARR but returns a compile-time string literal instead of an array.
- * Only available in C++20 and later. The resulting string should be printed with arguments converted
- * using mbedfmt::convert.
+ * This macro processes an fmt format string and its argument types, returning
+ * a printf-compatible format string stored in a const char*. The conversion and
+ * type checking are done at compile time. The resulting string should be
+ * printed with arguments converted using mbedfmt::convert.
  *
  * @param fmt The format string literal
  * @param ... The arguments that will be used to print the string
@@ -47,15 +26,15 @@
  *
  * @example
  * @code
- * static constexpr auto* fmt = MBEDFMT_FMT_TO_PRINTF_CSTR("Value: {:.2}", (float) 1.0);
+ * static constexpr const char* fmt = MBEDFMT_FMT_TO_PRINTF_CSTR("Value: {:.2}",
+ * (float) 1.0);
  * // fmt contains "Value: %.2f"
  * @endcode
  */
 #define MBEDFMT_FMT_TO_PRINTF_CSTR(fmt, ...)                                   \
-    decltype(mbedfmt::getPrintfCstr<decltype(EXPAND_AND_CONCAT(fmt))>(         \
-        decltype(mbedfmt::toArgPack(__VA_ARGS__))()))::c_str
-
-#endif
+    decltype(mbedfmt::internal::getPrintfCstr<decltype(EXPAND_AND_CONCAT(      \
+                 fmt))>(                                                       \
+        decltype(mbedfmt::internal::toArgPack(__VA_ARGS__))()))::c_str
 
 #define CONSTEVAL_ASSERT(c, msg) assert((c) && msg)
 
@@ -310,7 +289,7 @@ constexpr auto fmtToPrintfStr() {
     std::array<type_formatter_attributes, sizeof...(Args)> argFormatters{
         recursiveAttributes<Args>()...};
 
-    SAString<strlen(fmt_str::c_str) * 2> formattedString;
+    SAString<fmt_str().size() * 2> formattedString;
     size_t currentArg = 0;
     for (const char* s = fmt; *s; s++) {
         if (*s == '%') {
@@ -345,60 +324,45 @@ constexpr auto fmtToPrintfStr() {
                             argFormatters[currentArg++]);
     }
 
-    if (currentArg < sizeof...(Args)) {
-        CONSTEVAL_ASSERT(false, "Too many arguments provided");
-    }
+    // clang-format off
+    CONSTEVAL_ASSERT(currentArg == sizeof...(Args), "Too many arguments provided");
+    // clang-format on
 
     return formattedString;
 }
-#if __cplusplus >= 202002L
 
-template <size_t N, std::array arr, size_t... Idx>
-auto arrToTstringHelper(std::index_sequence<Idx...>) {
-    return tstring<arr[Idx]...>{};
+template <class fmt_str, class... Args>
+struct FormattedStringStaticWrapper {
+    static constexpr auto formattedString =
+        internal::fmtToPrintfStr<fmt_str, Args...>();
+};
+
+template <class StaticWrapper, size_t... Idx>
+auto staticStringToTStringHelper(std::index_sequence<Idx...>) {
+    return tstring<StaticWrapper::formattedString.data[Idx]...>{};
 }
 
-template <size_t N, std::array arr>
-auto arrToTstring() {
-    return arrToTstringHelper<N, arr>(std::make_index_sequence<N>{});
+template <class StaticWrapper>
+auto staticStringToTString() {
+    return staticStringToTStringHelper<StaticWrapper>(
+        std::make_index_sequence<StaticWrapper::formattedString.size>{});
 }
-
-#endif
-
-} // namespace internal
-
-#if __cplusplus >= 202002L
 
 template <class fmt_str, class... Args>
 constexpr auto getPrintfCstr(const arg_pack<Args...>&) {
-    constexpr auto formattedString =
-        internal::fmtToPrintfStr<fmt_str, Args...>();
-
-    return internal::arrToTstring<formattedString.size, formattedString.data>();
+    return staticStringToTString<
+        FormattedStringStaticWrapper<fmt_str, Args...>>();
 }
 
-#endif
-
-template <class fmt_str, class... Args>
-constexpr auto getPrintfArr(const arg_pack<Args...>&) {
-    constexpr auto formattedString =
-        internal::fmtToPrintfStr<fmt_str, Args...>();
-
-    std::array<char, formattedString.size + 1> result{};
-    for (size_t i = 0; i < formattedString.size; ++i)
-        result[i] = formattedString[i];
-    result[formattedString.size] = '\0';
-
-    return result;
-}
+} // namespace internal
 
 /**
  * @brief Recursively converts a value using type formatters
  *
- * This function checks if the type has a conversion method defined in its type_formatter.
- * If it does, it applies the conversion and recursively converts the result.
- * If it doesn't, it returns the original value. This function should be used with the
- * results of MBEDFMT_FMT_TO_PRINTF_CSTR/MBEDFMT_FMT_TO_PRINTF_ARR.
+ * This function checks if the type has a conversion method defined in its
+ * type_formatter. If it does, it applies the conversion and recursively
+ * converts the result. If it doesn't, it returns the original value. This
+ * function should be used with the results of MBEDFMT_FMT_TO_PRINTF_CSTR.
  *
  * @tparam T The type of the value to convert
  * @param val The value to convert
@@ -419,7 +383,7 @@ constexpr auto getPrintfArr(const arg_pack<Args...>&) {
  * @endcode
  */
 template <class T>
-auto convert(const T& val) {
+constexpr auto convert(const T& val) {
     if constexpr (internal::has_convert<T>::value) {
         return convert(type_formatter<T>::convert(val));
     } else {
