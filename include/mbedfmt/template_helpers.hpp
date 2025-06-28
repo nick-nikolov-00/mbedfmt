@@ -2,12 +2,14 @@
 
 #include <utility>
 
-namespace mbedfmt::internal {
-
+namespace {
 template <char... chars>
 struct tstring : std::integer_sequence<char, chars...> {
-    static constexpr const char c_str[sizeof...(chars) + 1] = {chars..., '\0'};
+    static constexpr const char c_str[] = {chars..., '\0'};
 };
+}
+
+namespace mbedfmt::internal {
 
 template <class... Args>
 struct arg_pack {};
@@ -20,6 +22,6 @@ auto toArgPack(const Args&...) {
 } // namespace mbedfmt::internal
 
 template <typename T, T... chars>
-constexpr mbedfmt::internal::tstring<chars...> operator""_mbedfmt_tstr() {
+constexpr tstring<chars...> operator""_mbedfmt_tstr() {
     return {};
 }
