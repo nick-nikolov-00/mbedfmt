@@ -5,7 +5,7 @@
 namespace {
 template <char... chars>
 struct tstring : std::integer_sequence<char, chars...> {
-    static constexpr const char c_str[] = {chars..., '\0'};
+    alignas(1) static constexpr const char c_str[] = {chars..., '\0'};
 };
 }
 
